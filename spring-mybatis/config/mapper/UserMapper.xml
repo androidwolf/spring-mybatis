@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- namespace命名空间，为了对sql语句进行隔离，方便管理 ，mapper开发dao方式，
+使用namespace有特殊作用 mapper代理开发时将namespace指定为mapper接口的全限定名 -->
+<mapper namespace="com.hust.springmybatis.mapper.UserMapper">
+	<!-- 在mapper.xml文件中配置很多的sql语句，执行每个sql语句时，
+	封装为MappedStatement对象 mapper.xml以statement为单位管理sql语句 -->
+
+	<sql id="query_user_where">
+		<!-- 如果userQueryVo中传入查询条件再进行sql拼接 -->
+		<if test="userCustom!=null">
+			<if test="userCustom.username!=null">
+				and username like '%${userCustom.username}%'
+			</if>
+			<if test="userCustom.sex!=null and userCustom.sex!=''">
+				and sex = #{userCustom.sex}
+			</if>
+			<!-- 根据id集合查询用户信息 -->
+			<!-- collection 集合的属性
+				 open 开始循环拼接的串
+				 close 结束循环拼接的串
+				 item 每次循环拼接的串
+				 separator 每两次循环中间拼接的串
+			 -->
+			<foreach collection="ids" open=" AND id IN (" close=")" item="id" separator=",">
+				#{id}
+			</foreach>
+			<!-- 还有很多的查询条件 -->
+		</if>	
+	</sql>
+
+	<!-- 定义resultMap，列名和属性名映射配置 -->
+	<resultMap type="com.hust.springmybatis.po.User" id="userListResultMap">
+		<id column="id_" property="id"/>
+		<!-- result就是普通的映射配置,非id列 -->
+		<result column="username_" property="username"/>
+		<result column="birthday_" property="birthday"/>
+	</resultMap>
+
+	<!-- 根据id查询用户信息 -->
+	<!-- id：唯一标识 一个statement #{}：表示 一个占位符，如果#{}中传入简单类型的参数
+	，#{}中的名称随意 parameterType：输入参数的类型，通过#{}接收
+	parameterType输入 的参数 
+	resultType：输出结果 类型，不管返回是多条还是单条，
+	指定单条记录映射的pojo类型 -->
+	<select id="findUserById" parameterType="int"
+		resultType="com.hust.springmybatis.po.User" useCache="false">
+		SELECT * FROM USER WHERE id= #{id}
+	</select>
+
+	<!-- 根据用户名称查询用户信息，可能返回多条 ${}：表示sql的拼接，通过${}接收参数，
+	将参数的内容不加任何修饰拼接在sql中。 -->
+	<select id="findUserByName" parameterType="java.lang.String"
+		resultType="com.hust.springmybatis.po.User">
+		select * from user where username like '%${value}%'
+	</select>
+
+	<select id="findUserList" parameterType="com.hust.springmybatis.po.UserQueryVo" resultType="com.hust.springmybatis.po.User">
+		select * from user
+		<!-- where标签相当于where关键字，可以自动去除第一个and -->
+		<where>
+		<!-- 引用sql片段 如果不在同一个文件中，要加namespace  -->
+		<include refid="query_user_where"></include>
+		</where>
+	</select>
+	
+	<!-- 使用resultMap作结果映射
+	如果引用的位置和resultMap的定义在同一个mapper.xml直接使用id
+	如果不在同一个mapper.xml 要在resultMap的id在前面加上namespace -->
+	<select id="findUserListResultMap" parameterType="com.hust.springmybatis.po.UserQueryVo" resultMap="userListResultMap">
+		select id id_,username username_,birthday birthday_ from user
+		<where>
+		<!-- 引用sql片段 如果不在同一个文件中，要加namespace  -->
+		<include refid="query_user_where"></include>
+		</where>
+	</select>
+	
+	<select id="findUserCount" parameterType="com.hust.springmybatis.po.UserQueryVo" resultType="int">
+		select count(*) from user where username like '%${userCustom.username}%'
+	</select>
+
+	<!-- 添加用户 parameterType：输入 参数的类型，User对象 包括 username,birthday,sex,address 
+		#{}接收pojo数据，可以使用OGNL解析出pojo的属性值 #{username}表示从parameterType中获取pojo的属性值 selectKey：用于进行主键返回，定义了获取主键值的sql 
+		order：设置selectKey中sql执行的顺序，相对于insert语句来说 keyProperty：将主键值设置到哪个属性 resultType：select 
+		LAST_INSERT_ID()的结果 类型 -->
+	<insert id="insertUser" parameterType="com.hust.springmybatis.po.User">
+		<selectKey keyProperty="id" order="BEFORE" resultType="int">
+			select LAST_INSERT_ID()
+		</selectKey>
+
+		INSERT INTO USER(id,username,birthday,sex,address)
+		VALUES(#{id},#{username},#{birthday},#{sex},#{address})
+	</insert>
+
+	<!-- mysql的uuid生成主键 -->
+	<!-- <insert id="insertUser" parameterType="com.hust.mybatis.po.User"> 
+		<selectKey keyProperty="id" order="BEFORE" resultType="string"> 
+			select uuid() 
+		</selectKey> 
+		INSERT INTO USER(id,username,birthday,sex,address) VALUES(#{id},#{username},#{birthday},#{sex},#{address}) 
+		</insert> 
+	-->
+
+	<!-- oracle 在执行insert之前执行select 序列.nextval() from dual取出序列最大值，将值设置到user对象 
+		的id属性 -->
+	<!-- <insert id="insertUser" parameterType="com.hust.mybatis.po.User"> 
+		<selectKey keyProperty="id" order="BEFORE" resultType="int">
+		 select 序列.nextval() from dual 
+		</selectKey> 
+		INSERT INTO USER(id,username,birthday,sex,address) 
+		VALUES(#{id},#{username},#{birthday},#{sex},#{address}) 
+		</insert> 
+	-->
+
+	<!-- 用户删除 -->
+	<delete id="deleteUser" parameterType="int">
+		delete from user where id=#{id}
+	</delete>
+	<!-- 用户更新 要求：传入的user对象中包括 id属性值 -->
+	<update id="updateUser" parameterType="com.hust.springmybatis.po.User">
+		update user set
+		username=#{username},birthday=#{birthday},sex=#{sex},address=#{address}
+		where id=#{id}
+	</update>
+
+</mapper>
+
